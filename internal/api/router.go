@@ -35,6 +35,7 @@ func NewRouter(cfg config.Config, store *db.Store) (*gin.Engine, error) {
 	router.Use(gin.Logger(), gin.Recovery(), s.cors())
 
 	router.GET("/health", s.health)
+	router.GET("/ready", s.ready)
 	router.POST("/api/orders", s.createOrder)
 	router.GET("/api/payments/freedompay/callback", s.freedomPayCallback)
 	router.POST("/api/payments/freedompay/callback", s.freedomPayCallback)

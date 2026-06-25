@@ -47,7 +47,24 @@ func (s Server) health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func (s Server) ready(c *gin.Context) {
+	databaseReady := s.store != nil && s.store.Ping(c.Request.Context()) == nil
+	paymentReady := s.cfg.FreedomPayConfigured()
+	status := http.StatusOK
+	if !databaseReady || !paymentReady {
+		status = http.StatusServiceUnavailable
+	}
+	c.JSON(status, gin.H{
+		"status":           readinessStatus(databaseReady && paymentReady),
+		"database_ready":   databaseReady,
+		"freedompay_ready": paymentReady,
+	})
+}
+
 func (s Server) createOrder(c *gin.Context) {
+	if !s.requireStore(c) || !s.requireFreedomPay(c) {
+		return
+	}
 	var req createOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, http.StatusBadRequest, "invalid JSON body")
@@ -88,9 +105,9 @@ func (s Server) createOrder(c *gin.Context) {
 		Currency:    order.Currency,
 		Description: fmt.Sprintf("Access to %s", video.Title),
 		Email:       req.Email,
-		ResultURL:   s.cfg.PublicURL + "/api/payments/freedompay/callback",
-		SuccessURL:  s.paymentReturnURL(s.cfg.SuccessURL, "/payment/success", order.ID),
-		FailureURL:  s.paymentReturnURL(s.cfg.FailureURL, "/payment/failure", order.ID),
+		ResultURL:   s.publicURL(c) + "/api/payments/freedompay/callback",
+		SuccessURL:  s.paymentReturnURL(c, s.cfg.SuccessURL, "/payment/success", order.ID),
+		FailureURL:  s.paymentReturnURL(c, s.cfg.FailureURL, "/payment/failure", order.ID),
 		Lifetime:    s.cfg.PaymentLifetime,
 	})
 	if err != nil {
@@ -106,6 +123,9 @@ func (s Server) createOrder(c *gin.Context) {
 }
 
 func (s Server) freedomPayCallback(c *gin.Context) {
+	if !s.requireStore(c) || !s.requireFreedomPayXML(c) {
+		return
+	}
 	if err := c.Request.ParseForm(); err != nil {
 		s.writeFreedomPayXML(c, "error", "invalid form")
 		return
@@ -154,6 +174,9 @@ func (s Server) freedomPayCallback(c *gin.Context) {
 }
 
 func (s Server) videoAccess(c *gin.Context) {
+	if !s.requireStore(c) {
+		return
+	}
 	videoID := strings.TrimSpace(c.Param("video_id"))
 	userID := strings.TrimSpace(c.Query("user_id"))
 	if userID == "" {
@@ -194,6 +217,9 @@ func (s Server) videoAccess(c *gin.Context) {
 }
 
 func (s Server) upsertVideo(c *gin.Context) {
+	if !s.requireStore(c) {
+		return
+	}
 	if s.cfg.AdminToken == "" || c.GetHeader("Authorization") != "Bearer "+s.cfg.AdminToken {
 		writeError(c, http.StatusUnauthorized, "missing or invalid admin token")
 		return
@@ -227,10 +253,56 @@ func writeError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{"error": message})
 }
 
-func (s Server) paymentReturnURL(configuredURL, fallbackPath string, orderID int64) string {
+func (s Server) requireStore(c *gin.Context) bool {
+	if s.store != nil {
+		return true
+	}
+	writeError(c, http.StatusServiceUnavailable, "database is not configured or unavailable")
+	return false
+}
+
+func (s Server) requireFreedomPay(c *gin.Context) bool {
+	if s.cfg.FreedomPayConfigured() {
+		return true
+	}
+	writeError(c, http.StatusServiceUnavailable, "Freedom Pay is not configured")
+	return false
+}
+
+func (s Server) requireFreedomPayXML(c *gin.Context) bool {
+	if s.cfg.FreedomPayConfigured() {
+		return true
+	}
+	s.writeFreedomPayXML(c, "error", "Freedom Pay is not configured")
+	return false
+}
+
+func readinessStatus(ready bool) string {
+	if ready {
+		return "ready"
+	}
+	return "not_ready"
+}
+
+func (s Server) publicURL(c *gin.Context) string {
+	if s.cfg.PublicURL != "" {
+		return s.cfg.PublicURL
+	}
+	proto := c.GetHeader("X-Forwarded-Proto")
+	if proto == "" {
+		proto = "https"
+	}
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+	return strings.TrimRight(proto+"://"+host, "/")
+}
+
+func (s Server) paymentReturnURL(c *gin.Context, configuredURL, fallbackPath string, orderID int64) string {
 	rawURL := strings.TrimSpace(configuredURL)
 	if rawURL == "" {
-		rawURL = s.cfg.PublicURL + fallbackPath
+		rawURL = s.publicURL(c) + fallbackPath
 	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

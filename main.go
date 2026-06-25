@@ -15,20 +15,26 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("config: %v", err)
-	}
+	cfg := config.Load()
 
 	ctx := context.Background()
-	store, err := db.Open(ctx, cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("database: %v", err)
-	}
-	defer store.Close()
+	var store *db.Store
+	if cfg.DatabaseURL == "" {
+		log.Printf("DATABASE_URL is not set; healthcheck will pass, but API data endpoints return 503")
+	} else {
+		var err error
+		store, err = db.Open(ctx, cfg.DatabaseURL)
+		if err != nil {
+			log.Printf("database unavailable: %v; healthcheck will pass, but API data endpoints return 503", err)
+		} else {
+			defer store.Close()
 
-	if err := store.Migrate(ctx); err != nil {
-		log.Fatalf("migrate database: %v", err)
+			if err := store.Migrate(ctx); err != nil {
+				log.Printf("migrate database: %v; healthcheck will pass, but API data endpoints return 503", err)
+				_ = store.Close()
+				store = nil
+			}
+		}
 	}
 
 	router, err := api.NewRouter(cfg, store)

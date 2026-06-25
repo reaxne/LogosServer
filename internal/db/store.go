@@ -9,7 +9,10 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound      = errors.New("not found")
+	ErrNotConfigured = errors.New("database is not configured")
+)
 
 type Store struct {
 	db *sql.DB
@@ -59,6 +62,13 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+func (s *Store) Ping(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return ErrNotConfigured
+	}
+	return s.db.PingContext(ctx)
 }
 
 func (s *Store) Migrate(ctx context.Context) error {

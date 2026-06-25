@@ -26,6 +26,22 @@ func TestRouterHealth(t *testing.T) {
 	}
 }
 
+func TestRouterReadyReportsUnavailableWhenDependenciesMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router, err := NewRouter(config.Config{}, nil)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+}
+
 func TestRouterCORSPreflight(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router, err := NewRouter(config.Config{SiteOrigins: []string{"https://example.com"}}, nil)
@@ -72,16 +88,31 @@ func TestRouterRejectsPartialCloudflareSigningConfig(t *testing.T) {
 
 func TestPaymentReturnURL(t *testing.T) {
 	server := Server{cfg: config.Config{PublicURL: "https://api.example.com"}}
+	ctx := &gin.Context{Request: httptest.NewRequest(http.MethodPost, "/api/orders", nil)}
 
-	got := server.paymentReturnURL("https://site.example.com/success?source=pay", "/payment/success", 42)
+	got := server.paymentReturnURL(ctx, "https://site.example.com/success?source=pay", "/payment/success", 42)
 	want := "https://site.example.com/success?order_id=42&source=pay"
 	if got != want {
 		t.Fatalf("paymentReturnURL() = %q, want %q", got, want)
 	}
 
-	got = server.paymentReturnURL("", "/payment/success", 42)
+	got = server.paymentReturnURL(ctx, "", "/payment/success", 42)
 	want = "https://api.example.com/payment/success?order_id=42"
 	if got != want {
 		t.Fatalf("fallback paymentReturnURL() = %q, want %q", got, want)
+	}
+}
+
+func TestPublicURLFallsBackToForwardedHeaders(t *testing.T) {
+	server := Server{}
+	req := httptest.NewRequest(http.MethodPost, "/api/orders", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "server.up.railway.app")
+	ctx := &gin.Context{Request: req}
+
+	got := server.publicURL(ctx)
+	want := "https://server.up.railway.app"
+	if got != want {
+		t.Fatalf("publicURL() = %q, want %q", got, want)
 	}
 }

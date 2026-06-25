@@ -10,4 +10,5 @@ RUN adduser -D -H appuser
 USER appuser
 COPY --from=build /server /server
 EXPOSE 8080
+ENV GIN_MODE=release
 CMD ["/server"]

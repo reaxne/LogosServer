@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -32,7 +31,7 @@ type Config struct {
 	PlaybackTokenLifetime     time.Duration
 }
 
-func Load() (Config, error) {
+func Load() Config {
 	cfg := Config{
 		Port:                      getEnv("PORT", "8080"),
 		DatabaseURL:               os.Getenv("DATABASE_URL"),
@@ -53,23 +52,11 @@ func Load() (Config, error) {
 		CloudflareSigningKeyPEM:   strings.ReplaceAll(os.Getenv("CLOUDFLARE_STREAM_SIGNING_KEY_PEM"), `\n`, "\n"),
 		PlaybackTokenLifetime:     durationEnv("PLAYBACK_TOKEN_LIFETIME", 2*time.Hour),
 	}
+	return cfg
+}
 
-	var missing []string
-	for name, value := range map[string]string{
-		"DATABASE_URL":           cfg.DatabaseURL,
-		"PUBLIC_URL":             cfg.PublicURL,
-		"FREEDOMPAY_MERCHANT_ID": cfg.FreedomPayMerchantID,
-		"FREEDOMPAY_SECRET_KEY":  cfg.FreedomPaySecretKey,
-	} {
-		if strings.TrimSpace(value) == "" {
-			missing = append(missing, name)
-		}
-	}
-	if len(missing) > 0 {
-		return Config{}, errors.New("missing required env vars: " + strings.Join(missing, ", "))
-	}
-
-	return cfg, nil
+func (c Config) FreedomPayConfigured() bool {
+	return strings.TrimSpace(c.FreedomPayMerchantID) != "" && strings.TrimSpace(c.FreedomPaySecretKey) != ""
 }
 
 func getEnv(key, fallback string) string {
