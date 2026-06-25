@@ -2,7 +2,6 @@ package freedompay
 
 import (
 	"errors"
-	"math"
 	"strconv"
 	"strings"
 )
@@ -43,9 +42,36 @@ func parseAmountCents(value string) (int64, error) {
 	if value == "" {
 		return 0, strconv.ErrSyntax
 	}
-	amount, err := strconv.ParseFloat(value, 64)
+	if strings.HasPrefix(value, "-") {
+		return 0, strconv.ErrSyntax
+	}
+
+	whole, fraction, ok := strings.Cut(value, ".")
+	if !ok {
+		amount, err := strconv.ParseInt(whole, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return amount * 100, nil
+	}
+
+	if whole == "" {
+		whole = "0"
+	}
+	if len(fraction) > 2 {
+		return 0, strconv.ErrSyntax
+	}
+	for len(fraction) < 2 {
+		fraction += "0"
+	}
+
+	wholeAmount, err := strconv.ParseInt(whole, 10, 64)
 	if err != nil {
 		return 0, err
 	}
-	return int64(math.Round(amount * 100)), nil
+	fractionAmount, err := strconv.ParseInt(fraction, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return wholeAmount*100 + fractionAmount, nil
 }

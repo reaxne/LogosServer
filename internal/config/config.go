@@ -15,6 +15,8 @@ type Config struct {
 	PublicURL   string
 	SiteOrigins []string
 	AdminToken  string
+	SuccessURL  string
+	FailureURL  string
 
 	FreedomPayMerchantID     string
 	FreedomPaySecretKey      string
@@ -37,6 +39,8 @@ func Load() (Config, error) {
 		PublicURL:                 strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
 		SiteOrigins:               splitCSV(os.Getenv("SITE_ORIGINS")),
 		AdminToken:                os.Getenv("ADMIN_TOKEN"),
+		SuccessURL:                strings.TrimSpace(os.Getenv("PAYMENT_SUCCESS_URL")),
+		FailureURL:                strings.TrimSpace(os.Getenv("PAYMENT_FAILURE_URL")),
 		FreedomPayMerchantID:      os.Getenv("FREEDOMPAY_MERCHANT_ID"),
 		FreedomPaySecretKey:       os.Getenv("FREEDOMPAY_SECRET_KEY"),
 		FreedomPayInitURL:         getEnv("FREEDOMPAY_INIT_URL", "https://api.freedompay.money/init_payment.php"),

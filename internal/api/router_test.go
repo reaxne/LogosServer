@@ -69,3 +69,19 @@ func TestRouterRejectsPartialCloudflareSigningConfig(t *testing.T) {
 		t.Fatal("expected partial Cloudflare signing config to fail")
 	}
 }
+
+func TestPaymentReturnURL(t *testing.T) {
+	server := Server{cfg: config.Config{PublicURL: "https://api.example.com"}}
+
+	got := server.paymentReturnURL("https://site.example.com/success?source=pay", "/payment/success", 42)
+	want := "https://site.example.com/success?order_id=42&source=pay"
+	if got != want {
+		t.Fatalf("paymentReturnURL() = %q, want %q", got, want)
+	}
+
+	got = server.paymentReturnURL("", "/payment/success", 42)
+	want = "https://api.example.com/payment/success?order_id=42"
+	if got != want {
+		t.Fatalf("fallback paymentReturnURL() = %q, want %q", got, want)
+	}
+}

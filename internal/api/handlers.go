@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -88,8 +89,8 @@ func (s Server) createOrder(c *gin.Context) {
 		Description: fmt.Sprintf("Access to %s", video.Title),
 		Email:       req.Email,
 		ResultURL:   s.cfg.PublicURL + "/api/payments/freedompay/callback",
-		SuccessURL:  s.cfg.PublicURL + "/payment/success?order_id=" + strconv.FormatInt(order.ID, 10),
-		FailureURL:  s.cfg.PublicURL + "/payment/failure?order_id=" + strconv.FormatInt(order.ID, 10),
+		SuccessURL:  s.paymentReturnURL(s.cfg.SuccessURL, "/payment/success", order.ID),
+		FailureURL:  s.paymentReturnURL(s.cfg.FailureURL, "/payment/failure", order.ID),
 		Lifetime:    s.cfg.PaymentLifetime,
 	})
 	if err != nil {
@@ -224,6 +225,21 @@ func (s Server) upsertVideo(c *gin.Context) {
 
 func writeError(c *gin.Context, status int, message string) {
 	c.JSON(status, gin.H{"error": message})
+}
+
+func (s Server) paymentReturnURL(configuredURL, fallbackPath string, orderID int64) string {
+	rawURL := strings.TrimSpace(configuredURL)
+	if rawURL == "" {
+		rawURL = s.cfg.PublicURL + fallbackPath
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	query := parsed.Query()
+	query.Set("order_id", strconv.FormatInt(orderID, 10))
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 type freedomPayResponse struct {
