@@ -35,7 +35,7 @@ type upsertVideoRequest struct {
 	ID           string `json:"id"`
 	Title        string `json:"title"`
 	PriceCents   int64  `json:"price_cents"`
-	BunnyVideoID string `json:"bunny_video_id "`
+	BunnyVideoID string `json:"bunny_video_id"`
 }
 
 type videoAccessResponse struct {
