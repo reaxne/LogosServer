@@ -28,21 +28,23 @@ type Video struct {
 type Order struct {
 	ID                int64
 	UserID            string
+	PhoneNumber       string
 	VideoID           string
 	Amount            int64
 	Currency          string
 	Status            string
+	PaymentURL        string
 	FreedomPayPayment string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }
 
 type CreateOrderParams struct {
-	UserID     string
-	VideoID    string
-	Amount     int64
-	Currency   string
-	CustomerID string
+	PhoneNumber string
+	VideoID     string
+	Amount      int64
+	Currency    string
+	CustomerID  string
 }
 
 func Open(ctx context.Context, databaseURL string) (*Store, error) {
@@ -82,6 +84,12 @@ CREATE TABLE IF NOT EXISTS videos (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS users (
+	phone_number TEXT PRIMARY KEY,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS orders (
 	id BIGSERIAL PRIMARY KEY,
 	user_id TEXT NOT NULL,
@@ -91,12 +99,36 @@ CREATE TABLE IF NOT EXISTS orders (
 	status TEXT NOT NULL DEFAULT 'pending',
 	customer_id TEXT NOT NULL DEFAULT '',
 	freedompay_payment_id TEXT NOT NULL DEFAULT '',
+	payment_url TEXT NOT NULL DEFAULT '',
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_url TEXT NOT NULL DEFAULT '';
+
+UPDATE orders
+SET phone_number = user_id
+WHERE phone_number IS NULL OR phone_number = '';
+
+INSERT INTO users (phone_number)
+SELECT DISTINCT phone_number
+FROM orders
+WHERE phone_number IS NOT NULL AND phone_number <> ''
+ON CONFLICT (phone_number) DO NOTHING;
+
+ALTER TABLE orders ALTER COLUMN phone_number SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS orders_user_video_paid_idx
 	ON orders(user_id, video_id)
+	WHERE status = 'paid';
+
+CREATE INDEX IF NOT EXISTS orders_phone_video_paid_idx
+	ON orders(phone_number, video_id)
+	WHERE status = 'paid';
+
+CREATE UNIQUE INDEX IF NOT EXISTS orders_phone_video_paid_unique_idx
+	ON orders(phone_number, video_id)
 	WHERE status = 'paid';
 `)
 	return err
@@ -131,27 +163,71 @@ WHERE id = $1
 }
 
 func (s *Store) CreateOrder(ctx context.Context, params CreateOrderParams) (Order, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Order{}, err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `
+INSERT INTO users (phone_number)
+VALUES ($1)
+ON CONFLICT (phone_number) DO UPDATE SET updated_at = now()
+`, params.PhoneNumber)
+	if err != nil {
+		return Order{}, err
+	}
+
 	var order Order
-	err := s.db.QueryRowContext(ctx, `
-INSERT INTO orders (user_id, video_id, amount_cents, currency, customer_id)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, user_id, video_id, amount_cents, currency, status, freedompay_payment_id, created_at, updated_at
-`, params.UserID, params.VideoID, params.Amount, params.Currency, params.CustomerID).
-		Scan(&order.ID, &order.UserID, &order.VideoID, &order.Amount, &order.Currency, &order.Status, &order.FreedomPayPayment, &order.CreatedAt, &order.UpdatedAt)
-	return order, err
+	err = tx.QueryRowContext(ctx, `
+INSERT INTO orders (user_id, phone_number, video_id, amount_cents, currency, customer_id)
+VALUES ($1, $1, $2, $3, $4, $5)
+RETURNING id, user_id, phone_number, video_id, amount_cents, currency, status, payment_url, freedompay_payment_id, created_at, updated_at
+`, params.PhoneNumber, params.VideoID, params.Amount, params.Currency, params.CustomerID).
+		Scan(&order.ID, &order.UserID, &order.PhoneNumber, &order.VideoID, &order.Amount, &order.Currency, &order.Status, &order.PaymentURL, &order.FreedomPayPayment, &order.CreatedAt, &order.UpdatedAt)
+	if err != nil {
+		return Order{}, err
+	}
+	return order, tx.Commit()
 }
 
 func (s *Store) GetOrder(ctx context.Context, id int64) (Order, error) {
 	var order Order
 	err := s.db.QueryRowContext(ctx, `
-SELECT id, user_id, video_id, amount_cents, currency, status, freedompay_payment_id, created_at, updated_at
+SELECT id, user_id, phone_number, video_id, amount_cents, currency, status, payment_url, freedompay_payment_id, created_at, updated_at
 FROM orders
 WHERE id = $1
-`, id).Scan(&order.ID, &order.UserID, &order.VideoID, &order.Amount, &order.Currency, &order.Status, &order.FreedomPayPayment, &order.CreatedAt, &order.UpdatedAt)
+`, id).Scan(&order.ID, &order.UserID, &order.PhoneNumber, &order.VideoID, &order.Amount, &order.Currency, &order.Status, &order.PaymentURL, &order.FreedomPayPayment, &order.CreatedAt, &order.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Order{}, ErrNotFound
 	}
 	return order, err
+}
+
+func (s *Store) GetActiveOrderForPhoneVideo(ctx context.Context, phoneNumber, videoID string) (Order, error) {
+	var order Order
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, user_id, phone_number, video_id, amount_cents, currency, status, payment_url, freedompay_payment_id, created_at, updated_at
+FROM orders
+WHERE phone_number = $1 AND video_id = $2 AND status IN ('pending', 'paid')
+ORDER BY
+	CASE status WHEN 'paid' THEN 0 ELSE 1 END,
+	created_at DESC
+LIMIT 1
+`, phoneNumber, videoID).Scan(&order.ID, &order.UserID, &order.PhoneNumber, &order.VideoID, &order.Amount, &order.Currency, &order.Status, &order.PaymentURL, &order.FreedomPayPayment, &order.CreatedAt, &order.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Order{}, ErrNotFound
+	}
+	return order, err
+}
+
+func (s *Store) SaveOrderPaymentURL(ctx context.Context, id int64, paymentURL string) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE orders
+SET payment_url = $2, updated_at = now()
+WHERE id = $1 AND status = 'pending'
+`, id, paymentURL)
+	return err
 }
 
 func (s *Store) MarkOrderPaid(ctx context.Context, id int64, paymentID string) error {
@@ -161,13 +237,43 @@ func (s *Store) MarkOrderPaid(ctx context.Context, id int64, paymentID string) e
 	}
 	defer tx.Rollback()
 
-	var userID, videoID string
+	var phoneNumber, videoID string
 	err = tx.QueryRowContext(ctx, `
+SELECT phone_number, video_id
+FROM orders
+WHERE id = $1
+`, id).Scan(&phoneNumber, &videoID)
+	if err != nil {
+		return err
+	}
+
+	var alreadyPaid bool
+	err = tx.QueryRowContext(ctx, `
+SELECT EXISTS (
+	SELECT 1 FROM orders
+	WHERE phone_number = $1 AND video_id = $2 AND status = 'paid' AND id <> $3
+)
+`, phoneNumber, videoID, id).Scan(&alreadyPaid)
+	if err != nil {
+		return err
+	}
+	if alreadyPaid {
+		_, err = tx.ExecContext(ctx, `
+UPDATE orders
+SET status = 'duplicate', freedompay_payment_id = $2, updated_at = now()
+WHERE id = $1 AND status <> 'paid'
+`, id, paymentID)
+		if err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+
+	_, err = tx.ExecContext(ctx, `
 UPDATE orders
 SET status = 'paid', freedompay_payment_id = $2, updated_at = now()
 WHERE id = $1
-RETURNING user_id, video_id
-`, id, paymentID).Scan(&userID, &videoID)
+`, id, paymentID)
 	if err != nil {
 		return err
 	}
@@ -183,13 +289,13 @@ WHERE id = $1 AND status <> 'paid'
 	return err
 }
 
-func (s *Store) UserHasAccess(ctx context.Context, userID, videoID string) (bool, error) {
+func (s *Store) PhoneHasAccess(ctx context.Context, phoneNumber, videoID string) (bool, error) {
 	var exists bool
 	err := s.db.QueryRowContext(ctx, `
 SELECT EXISTS (
 	SELECT 1 FROM orders
-	WHERE user_id = $1 AND video_id = $2 AND status = 'paid'
+	WHERE phone_number = $1 AND video_id = $2 AND status = 'paid'
 )
-`, userID, videoID).Scan(&exists)
+`, phoneNumber, videoID).Scan(&exists)
 	return exists, err
 }

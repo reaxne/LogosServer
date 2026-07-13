@@ -116,3 +116,28 @@ func TestPublicURLFallsBackToForwardedHeaders(t *testing.T) {
 		t.Fatalf("publicURL() = %q, want %q", got, want)
 	}
 }
+
+func TestNormalizePhoneNumber(t *testing.T) {
+	tests := map[string]string{
+		"+7 700 123 45 67": "+77001234567",
+		"87001234567":      "+77001234567",
+		"7001234567":       "+77001234567",
+		"0077001234567":    "+77001234567",
+	}
+
+	for input, want := range tests {
+		got, err := normalizePhoneNumber(input)
+		if err != nil {
+			t.Fatalf("normalizePhoneNumber(%q): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("normalizePhoneNumber(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestNormalizePhoneNumberRejectsInvalidValue(t *testing.T) {
+	if _, err := normalizePhoneNumber("not-a-phone"); err == nil {
+		t.Fatal("expected invalid phone number to fail")
+	}
+}
