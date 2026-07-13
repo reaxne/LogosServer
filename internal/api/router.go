@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"logosserver/internal/cloudflare"
+	"logosserver/internal/bunny"
 	"logosserver/internal/config"
 	"logosserver/internal/db"
 	"logosserver/internal/freedompay"
@@ -15,11 +15,11 @@ type Server struct {
 	cfg        config.Config
 	store      *db.Store
 	freedomPay freedompay.Client
-	stream     cloudflare.StreamSigner
+	stream     bunny.StreamSigner
 }
 
 func NewRouter(cfg config.Config, store *db.Store) (*gin.Engine, error) {
-	stream, err := cloudflare.NewStreamSigner(cfg)
+	stream, err := bunny.NewStreamSigner(cfg)
 	if err != nil {
 		return nil, err
 	}

@@ -80,7 +80,7 @@ func TestRouterMethodNotAllowed(t *testing.T) {
 
 func TestRouterRejectsPartialCloudflareSigningConfig(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	_, err := NewRouter(config.Config{CloudflareSigningKeyID: "key-id"}, nil)
+	_, err := NewRouter(config.Config{BunnyAuthKey: "key-id"}, nil)
 	if err == nil {
 		t.Fatal("expected partial Cloudflare signing config to fail")
 	}

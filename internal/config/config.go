@@ -25,32 +25,32 @@ type Config struct {
 	Currency                 string
 	PaymentLifetime          time.Duration
 
-	CloudflareStreamSubdomain string
-	CloudflareSigningKeyID    string
-	CloudflareSigningKeyPEM   string
-	PlaybackTokenLifetime     time.Duration
+	BunnyPullZone         string // e.g. vz-xxxxx.b-cdn.net (from Bunny Stream pull zone)
+	BunnyLibraryID        string // numeric Stream Library ID
+	BunnyAuthKey          string // pull zone "Token authentication key" (optional, for private videos)
+	PlaybackTokenLifetime time.Duration
 }
 
 func Load() Config {
 	cfg := Config{
-		Port:                      getEnv("PORT", "8080"),
-		DatabaseURL:               os.Getenv("DATABASE_URL"),
-		PublicURL:                 strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
-		SiteOrigins:               splitCSV(os.Getenv("SITE_ORIGINS")),
-		AdminToken:                os.Getenv("ADMIN_TOKEN"),
-		SuccessURL:                strings.TrimSpace(os.Getenv("PAYMENT_SUCCESS_URL")),
-		FailureURL:                strings.TrimSpace(os.Getenv("PAYMENT_FAILURE_URL")),
-		FreedomPayMerchantID:      os.Getenv("FREEDOMPAY_MERCHANT_ID"),
-		FreedomPaySecretKey:       os.Getenv("FREEDOMPAY_SECRET_KEY"),
-		FreedomPayInitURL:         getEnv("FREEDOMPAY_INIT_URL", "https://api.freedompay.money/init_payment.php"),
-		FreedomPayInitScript:      getEnv("FREEDOMPAY_INIT_SCRIPT", "init_payment.php"),
-		FreedomPayCallbackScript:  getEnv("FREEDOMPAY_CALLBACK_SCRIPT", "payment.php"),
-		Currency:                  getEnv("PAYMENT_CURRENCY", "KZT"),
-		PaymentLifetime:           durationEnv("PAYMENT_LIFETIME", 30*time.Minute),
-		CloudflareStreamSubdomain: os.Getenv("CLOUDFLARE_STREAM_SUBDOMAIN"),
-		CloudflareSigningKeyID:    os.Getenv("CLOUDFLARE_STREAM_SIGNING_KEY_ID"),
-		CloudflareSigningKeyPEM:   strings.ReplaceAll(os.Getenv("CLOUDFLARE_STREAM_SIGNING_KEY_PEM"), `\n`, "\n"),
-		PlaybackTokenLifetime:     durationEnv("PLAYBACK_TOKEN_LIFETIME", 2*time.Hour),
+		Port:                     getEnv("PORT", "8080"),
+		DatabaseURL:              os.Getenv("DATABASE_URL"),
+		PublicURL:                strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
+		SiteOrigins:              splitCSV(os.Getenv("SITE_ORIGINS")),
+		AdminToken:               os.Getenv("ADMIN_TOKEN"),
+		SuccessURL:               strings.TrimSpace(os.Getenv("PAYMENT_SUCCESS_URL")),
+		FailureURL:               strings.TrimSpace(os.Getenv("PAYMENT_FAILURE_URL")),
+		FreedomPayMerchantID:     os.Getenv("FREEDOMPAY_MERCHANT_ID"),
+		FreedomPaySecretKey:      os.Getenv("FREEDOMPAY_SECRET_KEY"),
+		FreedomPayInitURL:        getEnv("FREEDOMPAY_INIT_URL", "https://api.freedompay.money/init_payment.php"),
+		FreedomPayInitScript:     getEnv("FREEDOMPAY_INIT_SCRIPT", "init_payment.php"),
+		FreedomPayCallbackScript: getEnv("FREEDOMPAY_CALLBACK_SCRIPT", "payment.php"),
+		Currency:                 getEnv("PAYMENT_CURRENCY", "KZT"),
+		PaymentLifetime:          durationEnv("PAYMENT_LIFETIME", 30*time.Minute),
+		BunnyPullZone:            os.Getenv("BUNNY_PULL_ZONE"),
+		BunnyLibraryID:           os.Getenv("BUNNY_LIBRARY_ID"),
+		BunnyAuthKey:             strings.ReplaceAll(os.Getenv("BUNNY_AUTH_KEY"), `\n`, "\n"),
+		PlaybackTokenLifetime:    durationEnv("PLAYBACK_TOKEN_LIFETIME", 2*time.Hour),
 	}
 	return cfg
 }

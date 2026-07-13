@@ -32,10 +32,10 @@ type createOrderResponse struct {
 }
 
 type upsertVideoRequest struct {
-	ID                  string `json:"id"`
-	Title               string `json:"title"`
-	PriceCents          int64  `json:"price_cents"`
-	CloudflareStreamUID string `json:"cloudflare_stream_uid"`
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	PriceCents   int64  `json:"price_cents"`
+	BunnyVideoID string `json:"bunny_video_id "`
 }
 
 type videoAccessResponse struct {
@@ -248,13 +248,13 @@ func (s Server) videoAccess(c *gin.Context) {
 		Title:    video.Title,
 	}
 	if unlocked {
-		playbackURL, err := s.stream.PlaybackURL(video.CloudflareStreamUID, time.Now().Add(s.cfg.PlaybackTokenLifetime))
+		playbackURL, err := s.stream.PlaybackURL(video.BunnyVideoID, time.Now().Add(s.cfg.PlaybackTokenLifetime))
 		if err != nil {
 			writeError(c, http.StatusInternalServerError, "could not create playback URL")
 			return
 		}
 		resp.PlaybackURL = playbackURL
-		resp.ThumbnailURL = s.stream.ThumbnailURL(video.CloudflareStreamUID)
+		resp.ThumbnailURL = s.stream.ThumbnailURL(video.BunnyVideoID)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -274,16 +274,16 @@ func (s Server) upsertVideo(c *gin.Context) {
 	}
 	req.ID = strings.TrimSpace(req.ID)
 	req.Title = strings.TrimSpace(req.Title)
-	req.CloudflareStreamUID = strings.TrimSpace(req.CloudflareStreamUID)
-	if req.ID == "" || req.Title == "" || req.PriceCents <= 0 || req.CloudflareStreamUID == "" {
-		writeError(c, http.StatusBadRequest, "id, title, price_cents, and cloudflare_stream_uid are required")
+	req.BunnyVideoID = strings.TrimSpace(req.BunnyVideoID)
+	if req.ID == "" || req.Title == "" || req.PriceCents <= 0 || req.BunnyVideoID == "" {
+		writeError(c, http.StatusBadRequest, "id, title, price_cents, and bunny_video_id  are required")
 		return
 	}
 	video, err := s.store.UpsertVideo(c.Request.Context(), db.Video{
-		ID:                  req.ID,
-		Title:               req.Title,
-		PriceCents:          req.PriceCents,
-		CloudflareStreamUID: req.CloudflareStreamUID,
+		ID:           req.ID,
+		Title:        req.Title,
+		PriceCents:   req.PriceCents,
+		BunnyVideoID: req.BunnyVideoID,
 	})
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "could not save video")

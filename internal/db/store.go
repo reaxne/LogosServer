@@ -19,10 +19,10 @@ type Store struct {
 }
 
 type Video struct {
-	ID                  string `json:"id"`
-	Title               string `json:"title"`
-	PriceCents          int64  `json:"price_cents"`
-	CloudflareStreamUID string `json:"cloudflare_stream_uid"`
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	PriceCents   int64  `json:"price_cents"`
+	BunnyVideoID string `json:"bunny_video_id"`
 }
 
 type Order struct {
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS videos (
 	id TEXT PRIMARY KEY,
 	title TEXT NOT NULL,
 	price_cents BIGINT NOT NULL CHECK (price_cents > 0),
-	cloudflare_stream_uid TEXT NOT NULL,
+	bunny_video_id TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -136,26 +136,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS orders_phone_video_paid_unique_idx
 
 func (s *Store) UpsertVideo(ctx context.Context, video Video) (Video, error) {
 	err := s.db.QueryRowContext(ctx, `
-INSERT INTO videos (id, title, price_cents, cloudflare_stream_uid)
+INSERT INTO videos (id, title, price_cents, bunny_video_id )
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
 	title = EXCLUDED.title,
 	price_cents = EXCLUDED.price_cents,
-	cloudflare_stream_uid = EXCLUDED.cloudflare_stream_uid,
+	bunny_video_id = EXCLUDED.bunny_video_id ,
 	updated_at = now()
-RETURNING id, title, price_cents, cloudflare_stream_uid
-`, video.ID, video.Title, video.PriceCents, video.CloudflareStreamUID).
-		Scan(&video.ID, &video.Title, &video.PriceCents, &video.CloudflareStreamUID)
+RETURNING id, title, price_cents, bunny_video_id 
+`, video.ID, video.Title, video.PriceCents, video.BunnyVideoID).
+		Scan(&video.ID, &video.Title, &video.PriceCents, &video.BunnyVideoID)
 	return video, err
 }
 
 func (s *Store) GetVideo(ctx context.Context, id string) (Video, error) {
 	var video Video
 	err := s.db.QueryRowContext(ctx, `
-SELECT id, title, price_cents, cloudflare_stream_uid
+SELECT id, title, price_cents, bunny_video_id 
 FROM videos
 WHERE id = $1
-`, id).Scan(&video.ID, &video.Title, &video.PriceCents, &video.CloudflareStreamUID)
+`, id).Scan(&video.ID, &video.Title, &video.PriceCents, &video.BunnyVideoID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, ErrNotFound
 	}
