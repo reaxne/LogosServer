@@ -40,7 +40,7 @@ type upsertVideoRequest struct {
 
 type videoAccessResponse struct {
 	Unlocked     bool   `json:"unlocked"`
-	VideoID      string `json:"video_id"`
+	VideoID      int64  `json:"video_id"`
 	Title        string `json:"title,omitempty"`
 	PlaybackURL  string `json:"playback_url,omitempty"`
 	ThumbnailURL string `json:"thumbnail_url,omitempty"`
@@ -84,7 +84,8 @@ func (s Server) createOrder(c *gin.Context) {
 		return
 	}
 
-	video, err := s.store.GetVideo(c.Request.Context(), req.VideoID)
+	videoID, _ := strconv.ParseInt(req.VideoID, 10, 64)
+	video, err := s.store.GetVideo(c.Request.Context(), videoID)
 	if errors.Is(err, db.ErrNotFound) {
 		writeError(c, http.StatusNotFound, "video not found")
 		return
@@ -127,7 +128,7 @@ func (s Server) createOrder(c *gin.Context) {
 
 	order, err := s.store.CreateOrder(c.Request.Context(), db.CreateOrderParams{
 		PhoneNumber: phoneNumber,
-		VideoID:     req.VideoID,
+		VideoID:     videoID,
 		Amount:      video.PriceCents,
 		Currency:    s.cfg.Currency,
 		CustomerID:  req.Email,
@@ -220,7 +221,7 @@ func (s Server) videoAccess(c *gin.Context) {
 	if !s.requireStore(c) {
 		return
 	}
-	videoID := strings.TrimSpace(c.Param("video_id"))
+	videoID, _ := strconv.ParseInt(strings.TrimSpace(c.Param("video_id")), 10, 64)
 	phoneNumber, err := normalizePhoneNumber(firstNonEmpty(c.Query("phone_number"), c.Query("user_id")))
 	if err != nil {
 		writeError(c, http.StatusBadRequest, "valid phone_number is required")
@@ -259,6 +260,13 @@ func (s Server) videoAccess(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (s Server) GetVideosList(c *gin.Context) {
+	if !s.requireStore(c) {
+		return
+	}
+
+}
+
 func (s Server) upsertVideo(c *gin.Context) {
 	if !s.requireStore(c) {
 		return
@@ -279,8 +287,10 @@ func (s Server) upsertVideo(c *gin.Context) {
 		writeError(c, http.StatusBadRequest, "id, title, price_cents, and bunny_video_id  are required")
 		return
 	}
+
+	videoID, _ := strconv.ParseInt(req.ID, 10, 64)
 	video, err := s.store.UpsertVideo(c.Request.Context(), db.Video{
-		ID:           req.ID,
+		ID:           videoID,
 		Title:        req.Title,
 		PriceCents:   req.PriceCents,
 		BunnyVideoID: req.BunnyVideoID,

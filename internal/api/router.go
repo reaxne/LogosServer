@@ -40,6 +40,7 @@ func NewRouter(cfg config.Config, store *db.Store) (*gin.Engine, error) {
 	router.GET("/api/payments/freedompay/callback", s.freedomPayCallback)
 	router.POST("/api/payments/freedompay/callback", s.freedomPayCallback)
 	router.GET("/api/videos/:video_id/access", s.videoAccess)
+	router.GET("/api/videos")
 	router.POST("/api/videos", s.upsertVideo)
 	router.NoRoute(s.notFound)
 	router.NoMethod(s.methodNotAllowed)

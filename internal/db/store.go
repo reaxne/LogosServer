@@ -19,17 +19,23 @@ type Store struct {
 }
 
 type Video struct {
-	ID           string `json:"id"`
+	ID           int64  `json:"id"`
 	Title        string `json:"title"`
 	PriceCents   int64  `json:"price_cents"`
 	BunnyVideoID string `json:"bunny_video_id"`
+}
+
+type VideoListItem struct {
+	ID         int    `json:"id"`
+	Title      string `json:"title"`
+	PriceCents int64  `json:"price_cents"`
 }
 
 type Order struct {
 	ID                int64
 	UserID            string
 	PhoneNumber       string
-	VideoID           string
+	VideoID           int64
 	Amount            int64
 	Currency          string
 	Status            string
@@ -41,7 +47,7 @@ type Order struct {
 
 type CreateOrderParams struct {
 	PhoneNumber string
-	VideoID     string
+	VideoID     int64
 	Amount      int64
 	Currency    string
 	CustomerID  string
@@ -76,7 +82,7 @@ func (s *Store) Ping(ctx context.Context) error {
 func (s *Store) Migrate(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS videos (
-	id TEXT PRIMARY KEY,
+	id INTEGER PRIMARY KEY,
 	title TEXT NOT NULL,
 	price_cents BIGINT NOT NULL CHECK (price_cents > 0),
 	bunny_video_id TEXT NOT NULL,
@@ -93,7 +99,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS orders (
 	id BIGSERIAL PRIMARY KEY,
 	user_id TEXT NOT NULL,
-	video_id TEXT NOT NULL REFERENCES videos(id),
+	video_id INTEGER NOT NULL REFERENCES videos(id),
 	amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
 	currency TEXT NOT NULL,
 	status TEXT NOT NULL DEFAULT 'pending',
@@ -136,26 +142,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS orders_phone_video_paid_unique_idx
 
 func (s *Store) UpsertVideo(ctx context.Context, video Video) (Video, error) {
 	err := s.db.QueryRowContext(ctx, `
-INSERT INTO videos (id, title, price_cents, bunny_video_id )
+INSERT INTO videos (id, title, price_cents, bunny_video_id)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
 	title = EXCLUDED.title,
 	price_cents = EXCLUDED.price_cents,
-	bunny_video_id = EXCLUDED.bunny_video_id ,
+	bunny_video_id = EXCLUDED.bunny_video_id,
 	updated_at = now()
-RETURNING id, title, price_cents, bunny_video_id 
+RETURNING id, title, price_cents, bunny_video_id
 `, video.ID, video.Title, video.PriceCents, video.BunnyVideoID).
 		Scan(&video.ID, &video.Title, &video.PriceCents, &video.BunnyVideoID)
 	return video, err
 }
 
-func (s *Store) GetVideo(ctx context.Context, id string) (Video, error) {
+func (s *Store) GetVideo(ctx context.Context, id int64) (Video, error) {
 	var video Video
 	err := s.db.QueryRowContext(ctx, `
-SELECT id, title, price_cents, bunny_video_id 
+SELECT id, title, price_cents, bunny_video_id
 FROM videos
 WHERE id = $1
 `, id).Scan(&video.ID, &video.Title, &video.PriceCents, &video.BunnyVideoID)
+
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, ErrNotFound
 	}
@@ -289,7 +296,7 @@ WHERE id = $1 AND status <> 'paid'
 	return err
 }
 
-func (s *Store) PhoneHasAccess(ctx context.Context, phoneNumber, videoID string) (bool, error) {
+func (s *Store) PhoneHasAccess(ctx context.Context, phoneNumber string, videoID int64) (bool, error) {
 	var exists bool
 	err := s.db.QueryRowContext(ctx, `
 SELECT EXISTS (
@@ -298,4 +305,31 @@ SELECT EXISTS (
 )
 `, phoneNumber, videoID).Scan(&exists)
 	return exists, err
+}
+
+func (s *Store) ListVideos(ctx context.Context) ([]VideoListItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, title, price_cents
+		FROM videos
+		ORDER BY id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var videos []VideoListItem
+	for rows.Next() {
+		var v VideoListItem
+		if err := rows.Scan(&v.ID, &v.Title, &v.PriceCents); err != nil {
+			return nil, err
+		}
+		videos = append(videos, v)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return videos, nil
 }
