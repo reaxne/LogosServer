@@ -5,6 +5,7 @@ Go API for creating Freedom Pay payments and unlocking Bunny Stream videos after
 ## What It Provides
 
 * `POST /api/videos` saves video metadata and price. Requires `Authorization: Bearer ADMIN_TOKEN`.
+* `GET /api/videos`
 * `POST /api/orders` creates a Freedom Pay payment for a video.
 * `GET|POST /api/payments/freedompay/callback` verifies Freedom Pay callback signatures and marks orders paid.
 * `GET /api/videos/{video_id}/access?phone_number=...` tells your website if the phone number can watch and returns a Bunny Stream playback URL.

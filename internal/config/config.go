@@ -49,7 +49,7 @@ func Load() Config {
 		PaymentLifetime:          durationEnv("PAYMENT_LIFETIME", 30*time.Minute),
 		BunnyPullZone:            os.Getenv("BUNNY_PULL_ZONE"),
 		BunnyLibraryID:           os.Getenv("BUNNY_LIBRARY_ID"),
-		BunnyAuthKey:             strings.ReplaceAll(os.Getenv("BUNNY_AUTH_KEY"), `\n`, "\n"),
+		BunnyAuthKey:             os.Getenv("BUNNY_AUTH_KEY"),
 		PlaybackTokenLifetime:    durationEnv("PLAYBACK_TOKEN_LIFETIME", 2*time.Hour),
 	}
 	return cfg
