@@ -261,10 +261,15 @@ func (s Server) videoAccess(c *gin.Context) {
 }
 
 func (s Server) GetVideosList(c *gin.Context) {
-	if !s.requireStore(c) {
+	videos, err := s.store.ListVideos(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to get videos",
+		})
 		return
 	}
 
+	c.JSON(http.StatusOK, videos)
 }
 
 func (s Server) upsertVideo(c *gin.Context) {
