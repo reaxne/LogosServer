@@ -53,6 +53,7 @@ func (s Server) health(c *gin.Context) {
 func (s Server) ready(c *gin.Context) {
 	databaseReady := s.store != nil && s.store.Ping(c.Request.Context()) == nil
 	paymentReady := s.cfg.FreedomPayConfigured()
+	bunnyReady := s.cfg.BunnyAuthKey != ""
 	status := http.StatusOK
 	if !databaseReady || !paymentReady {
 		status = http.StatusServiceUnavailable
@@ -61,6 +62,7 @@ func (s Server) ready(c *gin.Context) {
 		"status":           readinessStatus(databaseReady && paymentReady),
 		"database_ready":   databaseReady,
 		"freedompay_ready": paymentReady,
+		"bunny_ready":      bunnyReady,
 	})
 }
 
