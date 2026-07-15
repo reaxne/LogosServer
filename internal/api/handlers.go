@@ -46,6 +46,10 @@ type videoAccessResponse struct {
 	ThumbnailURL string `json:"thumbnail_url,omitempty"`
 }
 
+type ThumbnailResponse struct {
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+}
+
 func (s Server) health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
@@ -269,6 +273,9 @@ func (s Server) videoAccess(c *gin.Context) {
 }
 
 func (s Server) GetVideosList(c *gin.Context) {
+	if !s.requireStore(c) {
+		return
+	}
 	videos, err := s.store.ListVideos(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -278,6 +285,33 @@ func (s Server) GetVideosList(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, videos)
+}
+
+func (s Server) GetThumbnail(c *gin.Context) {
+	if !s.requireStore(c) {
+		return
+	}
+
+	videoID, _ := strconv.ParseInt(strings.TrimSpace(c.Param("video_id")), 10, 64)
+
+	video, err := s.store.GetVideo(c.Request.Context(), videoID)
+	if errors.Is(err, db.ErrNotFound) {
+		writeError(c, http.StatusNotFound, "video not found")
+		return
+	}
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "could not load video")
+		return
+	}
+
+	resp := ThumbnailResponse{}
+	thumbnailURL, err := s.stream.ThumbnailURL(video.BunnyVideoID, time.Now().Add(s.cfg.PlaybackTokenLifetime))
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "could not create thumbnail URL")
+		return
+	}
+	resp.ThumbnailURL = thumbnailURL
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s Server) upsertVideo(c *gin.Context) {
