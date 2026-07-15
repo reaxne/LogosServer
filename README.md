@@ -9,6 +9,7 @@ Go API for creating Freedom Pay payments and unlocking Bunny Stream videos after
 * `POST /api/orders` creates a Freedom Pay payment for a video.
 * `GET|POST /api/payments/freedompay/callback` verifies Freedom Pay callback signatures and marks orders paid.
 * `GET /api/videos/{video_id}/access?phone_number=...` tells your website if the phone number can watch and returns a Bunny Stream playback URL.
+* `GET /api/thumbnail/{video_id}` tells thumbnail_url
 * `GET /health` is used by Railway health checks.
 * `GET /ready` checks whether the database and Freedom Pay settings are ready.
 
