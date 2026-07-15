@@ -2,6 +2,7 @@ package bunny
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -54,13 +55,24 @@ func (s StreamSigner) PlaybackURL(videoID string, expiresAt time.Time) (string, 
 	return fmt.Sprintf("%s?token=%s&expires=%d", baseURL, token, expUnix), nil
 }
 
-// ThumbnailURL returns the default thumbnail for a Bunny Stream video.
-func (s StreamSigner) ThumbnailURL(videoID string) string {
+func (s StreamSigner) ThumbnailURL(videoID string, expiresAt time.Time) (string, error) {
 	videoID = strings.TrimSpace(videoID)
 	if videoID == "" {
-		return ""
+		return "", errors.New("empty video id")
 	}
-	return fmt.Sprintf("https://%s/%s/thumbnail.jpg", s.pullZone, videoID)
+
+	path := fmt.Sprintf("/%s/thumbnail.jpg", videoID)
+	baseURL := fmt.Sprintf("https://%s%s", s.pullZone, path)
+
+	if s.authKey == "" {
+		return baseURL, nil
+	}
+
+	token, expUnix, err := s.thumbnailPathToken(path, expiresAt)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s?token=%s&expires=%d", baseURL, token, expUnix), nil
 }
 
 func (s StreamSigner) iframeBaseURL(videoID string) string {
@@ -78,4 +90,12 @@ func (s StreamSigner) token(videoID string, expiresAt time.Time) (string, int64,
 	raw := s.authKey + videoID + strconv.FormatInt(expUnix, 10)
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:]), expUnix, nil
+}
+
+func (s StreamSigner) thumbnailPathToken(path string, expiresAt time.Time) (string, int64, error) {
+	expUnix := expiresAt.Unix()
+	raw := s.authKey + path + strconv.FormatInt(expUnix, 10)
+	sum := sha256.Sum256([]byte(raw))
+	token := base64.RawURLEncoding.EncodeToString(sum[:])
+	return token, expUnix, nil
 }

@@ -50,7 +50,7 @@ func Load() Config {
 		BunnyPullZone:            os.Getenv("BUNNY_PULL_ZONE"),
 		BunnyLibraryID:           os.Getenv("BUNNY_LIBRARY_ID"),
 		BunnyAuthKey:             os.Getenv("BUNNY_AUTH_KEY"),
-		PlaybackTokenLifetime:    durationEnv("PLAYBACK_TOKEN_LIFETIME", 2*time.Hour),
+		PlaybackTokenLifetime:    durationEnv("PLAYBACK_TOKEN_LIFETIME", 24*time.Hour),
 	}
 	return cfg
 }
