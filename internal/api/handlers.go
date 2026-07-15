@@ -257,7 +257,13 @@ func (s Server) videoAccess(c *gin.Context) {
 			return
 		}
 		resp.PlaybackURL = playbackURL
-		resp.ThumbnailURL = s.stream.ThumbnailURL(video.BunnyVideoID)
+
+		thumbnailURL, err := s.stream.ThumbnailURL(video.BunnyVideoID, time.Now().Add(s.cfg.PlaybackTokenLifetime))
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "could not create thumbnail URL")
+			return
+		}
+		resp.ThumbnailURL = thumbnailURL
 	}
 	c.JSON(http.StatusOK, resp)
 }
