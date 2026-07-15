@@ -55,20 +55,19 @@ func (s StreamSigner) PlaybackURL(videoID string, expiresAt time.Time) (string, 
 	return fmt.Sprintf("%s?token=%s&expires=%d", baseURL, token, expUnix), nil
 }
 
+// ThumbnailURL returns the thumbnail URL for a Bunny Stream video.
+// If an auth key is configured, it appends a signed pull-zone token + expiry.
 func (s StreamSigner) ThumbnailURL(videoID string, expiresAt time.Time) (string, error) {
 	videoID = strings.TrimSpace(videoID)
 	if videoID == "" {
 		return "", errors.New("empty video id")
 	}
-
 	path := fmt.Sprintf("/%s/thumbnail.jpg", videoID)
-	baseURL := fmt.Sprintf("https://%s%s", s.pullZone, path)
-
+	baseURL := "https://" + s.pullZone + path
 	if s.authKey == "" {
 		return baseURL, nil
 	}
-
-	token, expUnix, err := s.thumbnailPathToken(path, expiresAt)
+	token, expUnix, err := s.pullZoneToken(path, expiresAt)
 	if err != nil {
 		return "", err
 	}
@@ -92,10 +91,17 @@ func (s StreamSigner) token(videoID string, expiresAt time.Time) (string, int64,
 	return hex.EncodeToString(sum[:]), expUnix, nil
 }
 
-func (s StreamSigner) thumbnailPathToken(path string, expiresAt time.Time) (string, int64, error) {
+// pullZoneToken implements Bunny's generic Pull Zone (CDN) token authentication
+// scheme — distinct from the Stream iframe embed token. It signs the URL path:
+// base64url( sha256_raw(security_key + path + expires) ), no padding.
+// See: https://docs.bunny.net/cdn/security/token-authentication
+func (s StreamSigner) pullZoneToken(path string, expiresAt time.Time) (string, int64, error) {
+	if s.authKey == "" {
+		return "", 0, errors.New("no auth key configured")
+	}
 	expUnix := expiresAt.Unix()
 	raw := s.authKey + path + strconv.FormatInt(expUnix, 10)
 	sum := sha256.Sum256([]byte(raw))
-	token := base64.RawURLEncoding.EncodeToString(sum[:])
+	token := base64.RawURLEncoding.EncodeToString(sum[:]) // already -/_ , no padding
 	return token, expUnix, nil
 }
